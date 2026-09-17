@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CrossFire - Cloud Dashboard</title>
+    <style>
+        body { font-family: Tahoma, sans-serif; background: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #333; text-align: center; margin-bottom: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; font-size: 14px; }
+        th { background-color: #007bff; color: white; }
+        .form-group { margin-top: 20px; background: #e9ecef; padding: 20px; border-radius: 8px; text-align: center; }
+        input { padding: 10px; font-size: 14px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; font-size: 14px; margin: 5px; border: none; cursor: pointer; border-radius: 4px; color: white; font-weight: bold; }
+        .btn-add { background: #28a745; }
+        .btn-add:hover { background: #218838; }
+        .btn-toggle { background: #f39c12; }
+        .btn-delete { background: #e74c3c; }
+        .status-active { color: #28a745; font-weight: bold; }
+        .status-disabled { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>لوحة تحكم تراخيص CrossFire</h2>
+        
+        <div class="form-group">
+            <h3>إضافة مفتاح ترخيص جديد</h3>
+            <input type="text" id="newKey" placeholder="مفتاح الترخيص (مثال: CF-VIP-2026)" style="width: 280px;">
+            <input type="text" id="newNote" placeholder="ملاحظة / اسم العميل" style="width: 220px;">
+            <button class="btn-add" onclick="addKey()">إضافة المفتاح</button>
+        </div>
+
+        <h3>المفاتيح المسجلة حالياً</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>مفتاح الترخيص</th>
+                    <th>الحالة</th>
+                    <th>الملاحظة / العميل</th>
+                    <th>الإجراءات</th>
+                </tr>
+            </thead>
+            <tbody id="keysTable">
+                <tr><td colspan="4">جاري تحميل البيانات من الـ VPS...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // رابط الـ VPS الخاص بك مباشرة
+        const API_URL = "http://88.214.57.225";
+
+        async function loadKeys() {
+            try {
+                let res = await fetch(`${API_URL}/api/keys`);
+                let keys = await res.json();
+                let tbody = document.getElementById('keysTable');
+                
+                if (keys.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4">لا توجد مفاتيح مسجلة حتى الآن</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = keys.map(k => `
+                    <tr>
+                        <td><b>${k.key}</b></td>
+                        <td><span class="${k.active ? 'status-active' : 'status-disabled'}">${k.active ? 'Active (مفعل)' : 'Disabled (معطل)'}</span></td>
+                        <td>${k.note || '-'}</td>
+                        <td>
+                            <button class="btn-toggle" onclick="performAction('${k.key}', 'toggle')">تبديل الحالة</button>
+                            <button class="btn-delete" onclick="performAction('${k.key}', 'delete')">حذف</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                document.getElementById('keysTable').innerHTML = '<tr><td colspan="4" style="color:red;">فشل الاتصال بالـ VPS. تأكد أن السيرفر يعمل.</td></tr>';
+            }
+        }
+
+        async function addKey() {
+            let key = document.getElementById('newKey').value.trim();
+            let note = document.getElementById('newNote').value.trim();
+            if (!key) return alert('الرجاء كتابة مفتاح الترخيص أولاً!');
+
+            try {
+                let res = await fetch(`${API_URL}/api/keys/add`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, note })
+                });
+
+                if (res.ok) {
+                    document.getElementById('newKey').value = '';
+                    document.getElementById('newNote').value = '';
+                    loadKeys();
+                } else {
+                    let data = await res.json();
+                    alert('خطأ: ' + (data.error || 'المفتاح موجود مسبقاً'));
+                }
+            } catch (err) {
+                alert('حدث خطأ أثناء الاتصال بالـ VPS');
+            }
+        }
+
+        async function performAction(key, action) {
+            try {
+                await fetch(`${API_URL}/api/keys/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, action })
+                });
+                loadKeys();
+            } catch (err) {
+                alert('حدث خطأ أثناء تنفيذ الإجراء');
+            }
+        }
+
+        // جلب البيانات أول ما تفتح الصفحة
+        loadKeys();
+    </script>
+</body>
+</html>
