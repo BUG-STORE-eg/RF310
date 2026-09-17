@@ -4,12 +4,11 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const PORT = 80; // تأكد أن المنفذ 80 متاح أو غيره حسب رغبتك
+const PORT = process.env.PORT || 80;
 
 app.use(express.json());
-app.use(cors()); // السماح بالاتصال من أي موقع مجاني (CORS)
+app.use(cors());
 
-// ملف تخزين المفاتيح محلياً على السيرفر
 const KEYS_FILE = path.join(__dirname, 'licenses.json');
 
 function getLicenses() {
@@ -28,10 +27,10 @@ function saveLicenses(licenses) {
     fs.writeFileSync(KEYS_FILE, JSON.stringify(licenses, null, 2));
 }
 
-// استضافة مجلد التحديثات (مثل ملفات الـ Zip والـ version.json)
+// استضافة مجلد التحديثات
 app.use('/launcher', express.static(path.join(__dirname, 'public')));
 
-// 1. API التحقق من المفتاح (يستخدمه اللانشر الخاص باللعبة)
+// 1. API التحقق من المفتاح (للانشر)
 app.post('/api/verify-key', (req, res) => {
     const { license_key } = req.body;
     let licenses = getLicenses();
@@ -44,12 +43,12 @@ app.post('/api/verify-key', (req, res) => {
     }
 });
 
-// 2. API جلب كل المفاتيح (تستخدمه الداشبورد الخارجية)
+// 2. API جلب المفاتيح (للداشبورد)
 app.get('/api/keys', (req, res) => {
     res.json(getLicenses());
 });
 
-// 3. API إضافة مفتاح جديد
+// 3. API إضافة مفتاح
 app.post('/api/keys/add', (req, res) => {
     const { key, note } = req.body;
     if (!key) return res.status(400).json({ error: 'Key is required' });
@@ -64,18 +63,16 @@ app.post('/api/keys/add', (req, res) => {
     }
 });
 
-// 4. API تنفيذ إجراء (تبديل الحالة Active/Disabled أو حذف)
+// 4. API تعديل أو حذف مفتاح
 app.post('/api/keys/action', (req, res) => {
-    const { key, action } = req.body; // action: 'toggle' or 'delete'
+    const { key, action } = req.body;
     let licenses = getLicenses();
     
     if (action === 'delete') {
         licenses = licenses.filter(k => k.key !== key);
     } else if (action === 'toggle') {
         let item = licenses.find(k => k.key === key);
-        if (item) {
-            item.active = !item.active;
-        }
+        if (item) item.active = !item.active;
     }
     
     saveLicenses(licenses);
